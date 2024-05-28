@@ -4,4 +4,4 @@ project(MSD)
 set(CMAKE_CXX_STANDARD 14)
 
 add_executable(MSD
-        msd.cpp)
+        a.c)

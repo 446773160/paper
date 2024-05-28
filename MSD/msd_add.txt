@@ -1,0 +1,324 @@
+/*
+ * main.c
+ *
+ *  Created on: 2024年3月7日
+ *      Author: 18447
+ */
+#include "stdio.h"
+#include "string.h"
+#include "xparameters.h"
+#include "msd_33.h"
+#include "xil_io.h"
+#include "sleep.h"
+#include "stdlib.h"
+#include "stdint.h"
+#include "math.h"
+#include "xtime_l.h"
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#define START_ADDRESS 0x43c00000
+#define END_ADDRESS   0x43FB0000
+#define STEP_SIZE     0x10000 // 假设步长为 0x10000
+
+
+void decToBin(long long dec, int bin[])
+{
+    if (dec < 0)
+    {
+        dec *= -1;
+        bin[0] = 1; // 0代表正，1代表负
+    }
+    else
+    {
+        bin[0] = 0;
+    }
+    long long num = dec;
+
+    int temp[99];
+    int i;
+    for (i = 0; num != 0; i++)
+    {
+        temp[i] = num % 2;  // 使用 % 运算符计算余数
+        num /= 2;
+    }
+    for (int j = 1, index = i - 1; j <= i; j++, index--)
+    {
+        bin[j] = temp[index];
+    }
+    bin[i + 1] = -2; // 结束标志
+}
+
+
+void binToMsd(int bin[], int msd[])
+{
+    int index_msd = 0;
+    if (bin[0] == 1)
+    {
+        for (int index_bin = 1; bin[index_bin] != -2; index_bin++, index_msd++)
+        {
+            msd[index_msd] = 0;
+            if (bin[index_bin] == 1)
+                msd[index_msd] = -1;
+        }
+        msd[index_msd] = -2; // 结束标志
+    }
+    else
+    {
+        for (int index_bin = 1; bin[index_bin] != -2; index_bin++, index_msd++)
+        {
+            msd[index_msd] = bin[index_bin];
+        }
+        msd[index_msd] = -2; // 结束标志
+    }
+}
+
+int bin_to_dec(char bin[], int len)
+{
+    int result = 0, base = 1;
+    for (int i = len - 1; i >= 0; i--, base = base * 2)
+        result = result + (bin[i] - '0') * base;
+    return result;
+}
+
+long long msdToDec(int msd[])
+{
+    long long result = 0;
+    int len = 0;
+    for (; msd[len] != -2; len++)
+        ;
+
+    for (int i = 0, j = len - 1; i < len; i++, j--)
+    {
+        long long t = 1;
+        for (int k = 0; k < j; k++)
+        {
+            t *= 2;
+        }
+        result += msd[i] * t;
+    }
+    return result;
+}
+
+
+void convertToBinaryString(int *msd, char *result)
+{
+    int i = 0;
+    while (msd[i] != -2)
+    {
+        if (msd[i] == 0)
+        {
+            strcat(result, "00");
+        }
+        else if (msd[i] == 1)
+        {
+            strcat(result, "01");
+        }
+        else if (msd[i] == -1)
+        {
+            strcat(result, "10");
+        }
+        i++;
+    }
+}
+
+void binaryStringToMSD(char *binaryString, int *intArray, int length)
+{
+    for (int i = 0; i < length; i++)
+    {
+        char tmp[3];
+        strncpy(tmp, binaryString + i * 2, 2);
+        tmp[2] = '\0';
+
+        if (strcmp(tmp, "00") == 0)
+        {
+            intArray[i] = 0;
+        }
+        else if (strcmp(tmp, "01") == 0)
+        {
+            intArray[i] = 1;
+        }
+        else if (strcmp(tmp, "10") == 0)
+        {
+            intArray[i] = -1;
+        }
+        // Add more conditions as needed
+    }
+}
+
+void cdecToBin(unsigned value, int bits, char *binaryArray)
+{
+    for (int i = bits - 1; i >= 0; i--)
+    {
+        binaryArray[bits - 1 - i] = ((value >> i) & 1) + '0';
+    }
+    binaryArray[bits] = '\0';  // 添加 null 终止符
+}
+
+int main(){
+    // 定义ip核地址
+    int arrayLength = (END_ADDRESS - START_ADDRESS) / STEP_SIZE + 1;
+    int deviceAddresses[arrayLength];
+    int currentAddress = START_ADDRESS;
+    XTime tEnd, tbegin;
+    u32 tused;
+
+    XTime_GetTime(&tbegin);
+    for (int i = 0; i < arrayLength; ++i) {
+        deviceAddresses[i] = currentAddress;
+        currentAddress += STEP_SIZE;
+    }
+
+    // 打印数组内容（可选）
+   /* printf("Device Addresses:\n");
+    for (int i = 0; i < arrayLength; ++i) {
+        printf("%X\n", deviceAddresses[i]);
+    }*/
+
+    //定义寄存器地址
+    int k_reg[9];
+	for (int i = 0; i < 9; i++) {
+		        k_reg[i] = i * 4;
+	}
+	//long long data_a=-202, data_b=217;
+	long long data_a[60] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10,11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60};
+	long long data_b[60] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10,11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60};
+	int bin_a[36];
+	int bin_b[36];
+	int msd_a[36];
+	int msd_b[36];
+
+	//printf("请输入长整数：(范围是-8589934591~8589934592)");
+	for(int i=0;i<60;i++){
+	    decToBin(data_a[i], bin_a);
+	    decToBin(data_b[i], bin_b);
+	    binToMsd(bin_a, msd_a);
+	    binToMsd(bin_b, msd_b);
+	   /* printf("\n");
+	        printf("二进制转MSD\n");
+	        for (int i = 0; i < 70 && msd_a[i] != -2; i++)
+	        {
+	            printf("%d ", msd_a[i]);
+	        }
+	        printf("\n");
+	        for (int i = 0; i < 70 && msd_b[i] != -2; i++)
+	        {
+	            printf("%d ", msd_b[i]);
+	        }
+	        printf("\n");*/
+
+	        char za[67] = ""; // Assume a reasonable maximum size for the result
+	        char zb[67] = "";
+
+	        // Convert msd_a and msd_b to binary strings
+	        convertToBinaryString(msd_a, za);
+	        convertToBinaryString(msd_b, zb);
+
+	        // Print the binary strings
+	        //printf("za: %s\n", za);
+	       // printf("zb: %s\n", zb);
+
+	        int len_za = strlen(za);
+	        int len_zb = strlen(zb);
+	        //uint32_t reg_a[3] = {0};
+	        //uint32_t reg_b[3] = {0};
+	        unsigned reg_a[3] = {0};
+	        unsigned reg_b[3] = {0};
+	       // printf("len_za: %d\n", len_za);
+	       //printf("len_zb: %d\n", len_zb);
+
+	        // 将za，zb转为能送入寄存器的32位无符号整数
+	        if (len_za <= 32)
+	        {
+	            reg_a[0] = bin_to_dec(za, len_za);
+	        }
+	        else if (len_za > 32 && len_za <= 64)
+	        {
+	            reg_a[0] = bin_to_dec(za + len_za - 32, 32);
+	            reg_a[1] = bin_to_dec(za, len_za - 32);
+	        }
+	        else if (len_za > 64 && len_za <= 96)
+	        {
+	            reg_a[0] = bin_to_dec(za + len_za - 32, 32);
+	            reg_a[1] = bin_to_dec(za + len_za - 64, 32);
+	            reg_a[2] = bin_to_dec(za, len_za - 64);
+	        }
+	        // 类似地，提取二进制数据并转换为十进制整数（reg_b）
+	        if (len_zb <= 32)
+	        {
+	            reg_b[0] = bin_to_dec(zb, len_zb);
+	        }
+	        else if (len_zb > 32 && len_zb <= 64)
+	        {
+	            reg_b[0] = bin_to_dec(zb + len_zb - 32, 32);
+	            reg_b[1] = bin_to_dec(zb, len_zb - 32);
+	        }
+	        else if (len_zb > 64 && len_zb <= 96)
+	        {
+	            reg_b[0] = bin_to_dec(zb + len_zb - 32, 32);
+	            reg_b[1] = bin_to_dec(zb + len_zb - 64, 32);
+	            reg_b[2] = bin_to_dec(zb, len_zb - 64);
+	        }
+
+	    //  printf("reg_a: %u, %u, %u\n", reg_a[0], reg_a[1], reg_a[2]);
+	    //  printf("reg_b: %u, %u, %u\n", reg_b[0], reg_b[1], reg_b[2]);
+
+	     // 记录开始执行时间
+	    //写数据
+		MSD_33_mWriteReg(deviceAddresses[i], k_reg[0], reg_a[0]);
+		MSD_33_mWriteReg(deviceAddresses[i], k_reg[1], reg_a[1]);
+		MSD_33_mWriteReg(deviceAddresses[i], k_reg[2], reg_a[2]);
+
+		MSD_33_mWriteReg(deviceAddresses[i], k_reg[3], reg_b[0]);
+		MSD_33_mWriteReg(deviceAddresses[i], k_reg[4], reg_b[1]);
+		MSD_33_mWriteReg(deviceAddresses[i], k_reg[5], reg_b[2]);
+
+	}
+	XTime_GetTime(&tEnd);
+    tused = ((tEnd-tbegin)*1000000)/(COUNTS_PER_SECOND);
+	xil_printf("time elapsed is %d us\r\n",tused);
+	sleep(1);
+	long long ansDec[60]={0};//存储结果
+	//读数据
+	unsigned decresult[3];
+
+	for(int i=0;i<60;i++){
+		decresult[0]=MSD_33_mReadReg(deviceAddresses[i], k_reg[6]);
+		decresult[1]=MSD_33_mReadReg(deviceAddresses[i], k_reg[7]);
+		decresult[2]=MSD_33_mReadReg(deviceAddresses[i], k_reg[8]);
+
+	//printf("%u ",decresult[0]);
+	//printf("%u ",decresult[1]);
+	//printf("%u\n",decresult[2]);
+	char ans_c[70] = "";
+	    // 转换第3个元素为6位二进制
+	    cdecToBin(decresult[2], 6, ans_c);
+	    // 转换第二个元素为32位二进制
+	    cdecToBin(decresult[1], 32, ans_c + 6);
+	    // 转换第一个元素为32位二进制，不足位数补零
+	    cdecToBin(decresult[0], 32, ans_c + 38);
+
+	    // 打印结果
+	  //  printf("ans_c: %s\n", ans_c);
+	  //  printf("len_cresult: %d\n", strlen(ans_c));
+
+	    int msd_c[40];
+
+	    int length = strlen(ans_c) / 2; // Assuming the length is even
+	    binaryStringToMSD(ans_c, msd_c, length);
+	    msd_c[length] = -2;
+	    // Print the converted integers
+	//    for (int i = 0; i < length + 1; i++)
+	//    {
+	 //       printf("%d ", msd_c[i]);
+	 //   }
+	 //   printf("\n");
+
+	   ansDec[i]= msdToDec(msd_c);
+  }
+	 printf("结果为：\n");
+	for(int i=0;i<60;i++){
+	    printf("%lld \n", ansDec[i]);
+	}
+	    return 0;
+}
+
+

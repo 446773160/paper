@@ -1,16 +1,16 @@
 #include <iostream>
 #include <string>
 #include <deque>
-#include<vector>
+#include <vector>
 using namespace std;
 
 class MSD
 {
 private:
     const int M[3][3] = {
-    {0, 1, 1},
-    {0, 0, 0},
-    {-1, 0, 1} };
+        {0, 1, 1},
+        {0, 0, 0},
+        {-1, 0, 1}};
     const int T[3][3] = {
         {-1, -1, 0},
         {-1, 0, 1},
@@ -65,11 +65,11 @@ private:
         if (size_R > size_G)
             resize(aux_G, aux_R);
         int length = size_G - size_R;
-        while (length>0) {
+        while (length > 0)
+        {
             aux_R.push_front(0);
             length--;
         }
-            
     };
     deque<int> transform_t(deque<int> aux_R, deque<int> aux_G)
     {
@@ -111,17 +111,23 @@ private:
     {
         deque<int> result;
         for (int i = 0; i < aux_R.size(); i++)
-            result.push_back(M[x+1][aux_R[i] + 1]);
+            result.push_back(M[x + 1][aux_R[i] + 1]);
         return result;
     };
     vector<deque<int>> bit_mul_transform(deque<int> aux_R, deque<int> aux_G)
     {
         vector<deque<int>> result;
         int g_size = aux_G.size();
-        for (auto g : aux_G) {
+        for (auto g : aux_G)
+        {
             deque<int> mid_result = transform_m(aux_R, g);
             for (int i = --g_size; i > 0; i--)
                 mid_result.push_back(0);
+            for (int element : mid_result)
+            {
+                cout << element << " ";
+            }
+            cout << endl;
             result.push_back(mid_result);
         }
         return result;
@@ -137,16 +143,16 @@ private:
         deque<int> result = transform_t(u_, w_);
         return result;
     };
-    int abs(int x) {
+    int abs(int x)
+    {
         if (x < 0)
-            x= -x;
+            x = -x;
         return x;
     };
+
 public:
-    MSD()
-    {
-    };
-    deque<int> msd_add(int R,int G)
+    MSD(){};
+    deque<int> msd_add(int R, int G)
     {
         this->R = R;
         this->G = G;
@@ -167,9 +173,9 @@ public:
             result.pop_front();
         return result;
     };
-    deque<int> msd_mul(int R,int G)
+    deque<int> msd_mul(int R, int G)
     {
-        if (abs(R)> abs(G))
+        if (abs(R) > abs(G))
             return msd_mul(G, R);
         this->R = R;
         this->G = G;
@@ -179,7 +185,7 @@ public:
             throw "deque is not empty";
         aux_R = transform_msd(R, aux_R);
         aux_G = transform_msd(G, aux_G);
-        vector<deque<int>> s= bit_mul_transform(aux_R, aux_G);
+        vector<deque<int>> s = bit_mul_transform(aux_R, aux_G);
         if (s.size() < 2)
             throw "detail error";
         int s_size = s.size();
@@ -196,12 +202,11 @@ public:
     };
 };
 
-
 int main()
 {
 
     MSD msd = MSD();
-    deque<int> result = msd.msd_mul(6,8);
+    deque<int> result = msd.msd_mul(-10, 2);
     for (int num : result)
         cout << num << " ";
     cout << endl;

@@ -1,0 +1,540 @@
+/******************************************************************************
+*
+* Copyright (C) 2009 - 2014 Xilinx, Inc.  All rights reserved.
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in
+* all copies or substantial portions of the Software.
+*
+* Use of the Software is limited solely to applications:
+* (a) running on a Xilinx device, or
+* (b) that interact with a Xilinx device through a bus or interconnect.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+* XILINX  BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+* WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+* OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+*
+* Except as contained in this notice, the name of the Xilinx shall not be used
+* in advertising or otherwise to promote the sale, use or other dealings in
+* this Software without prior written authorization from Xilinx.
+*
+******************************************************************************/
+
+/*
+ * helloworld.c: simple test application
+ *
+ * This application configures UART 16550 to baud rate 9600.
+ * PS7 UART (Zynq) is not initialized by this application, since
+ * bootrom/bsp configures it to baud rate 115200
+ *
+ * ------------------------------------------------
+ * | UART TYPE   BAUD RATE                        |
+ * ------------------------------------------------
+ *   uartns550   9600
+ *   uartlite    Configurable only in HW design
+ *   ps7_uart    115200 (configured by bootrom/bsp)
+ */
+
+#include "stdio.h"
+#include "stdlib.h"
+#include "platform.h"
+#include "xil_printf.h"
+#include "string.h"
+#include "xparameters.h"
+#include "msd_33.h"
+#include "xil_io.h"
+#include "sleep.h"
+#include "stdint.h"
+#include "math.h"
+#include "xtime_l.h"
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#define START_ADDRESS 0x43c00000
+#define END_ADDRESS 0x43FB0000
+#define STEP_SIZE 0x10000 // 假设步长为 0x10000
+#define ARRAY_SIZE 60
+
+
+
+
+const int M[3][3] = {
+    {0, 1, 1},
+    {0, 0, 0},
+    {-1, 0, 1}
+};
+
+// 定义双端队列节点结构体
+typedef struct Node {
+    int data;
+    struct Node* next;
+    struct Node* prev;
+} Node;
+
+// 定义双端队列结构体
+typedef struct {
+    Node* front; // 头部指针
+    Node* rear;  // 尾部指针
+    int size;    // 队列大小
+} Deque;
+
+// 初始化双端队列
+void initDeque(Deque* deque) {
+    deque->front = NULL;
+    deque->rear = NULL;
+    deque->size = 0;
+}
+void freeNode(Node* node) {
+    free(node);
+}
+
+void freeDeque(Deque* deque) {
+    // 释放队列中的每个节点
+    Node* current = deque->front;
+    while (current != NULL) {
+        Node* temp = current;
+        current = current->next;
+        freeNode(temp);
+    }
+    // 释放队列结构体本身
+    free(deque);
+}
+
+
+
+void insertFront(Deque* deque, int data) {
+    Node* newNode = (Node*)malloc(sizeof(Node));
+    newNode->data = data;
+    newNode->next = deque->front;
+    newNode->prev = NULL;
+
+    if (deque->front == NULL) {
+        deque->front = newNode;
+        deque->rear = newNode;
+    } else {
+        deque->front->prev = newNode;
+        deque->front = newNode;
+    }
+
+    deque->size++;
+}
+
+
+void insertRear(Deque* deque, int data) {
+    Node* newNode = (Node*)malloc(sizeof(Node));
+    newNode->data = data;
+    newNode->next = NULL;
+    newNode->prev = deque->rear;
+
+    if (deque->rear == NULL) {
+        deque->front = newNode;
+        deque->rear = newNode;
+    } else {
+        deque->rear->next = newNode;
+        deque->rear = newNode;
+    }
+
+    deque->size++;
+}
+
+
+int deleteFront(Deque* deque) {
+    if (deque->front == NULL) {
+        printf("Deque is empty!\n");
+        return -1;
+    }
+
+    int data = deque->front->data;
+    Node* temp = deque->front;
+    deque->front = deque->front->next;
+
+    if (deque->front == NULL) {
+        deque->rear = NULL;
+    } else {
+        deque->front->prev = NULL;
+    }
+
+    free(temp);
+    deque->size--;
+    return data;
+}
+
+
+int deleteRear(Deque* deque) {
+    if (deque->rear == NULL) {
+        printf("Deque is empty!\n");
+        return -1;
+    }
+
+    int data = deque->rear->data;
+    Node* temp = deque->rear;
+    deque->rear = deque->rear->prev;
+
+    if (deque->rear == NULL) {
+        deque->front = NULL;
+    } else {
+        deque->rear->next = NULL;
+    }
+
+    free(temp);
+    deque->size--;
+    return data;
+}
+
+void printDeque(Deque* deque) {
+    printf("Deque (size %d): ", deque->size);
+    Node* current = deque->front;
+    while (current != NULL) {
+        printf("%d ", current->data);
+        current = current->next;
+    }
+    printf("\n");
+}
+
+
+
+Deque* transform_m(Deque* msd, int b,int bit_zero) {
+    Deque* deque = (Deque*)malloc(sizeof(Deque));
+    initDeque(deque);
+    Node* current = msd->front; // 从队尾开始
+    while (current != NULL) {
+        insertRear(deque, M[b+1][current->data + 1]);
+        current = current->next;
+    }
+    int tmp=bit_zero;
+    while(tmp>0){
+    	insertRear(deque,0);
+    	tmp--;
+    }
+    printDeque(deque);
+    return deque;
+}
+
+Deque* decimalToBinary(long long n) {
+    Deque* binaryDeque=(Deque*)malloc(sizeof(Deque));
+    initDeque(binaryDeque);
+    int positive = 0;
+    if (n < 0) {
+        positive = 1;
+        n = -n;
+    }
+    while (n > 0) {
+        int bit = n % 2;
+        insertFront(binaryDeque, bit);
+        n /= 2;
+    }
+    insertFront(binaryDeque, positive);
+    return binaryDeque;
+}
+
+Deque* binaryToMSD(Deque* binaryDeque) {
+    Deque* msdDeque=(Deque*)malloc(sizeof(Deque));
+    initDeque(msdDeque);
+	Node* current = binaryDeque->front;
+	int is_positive=current->data;
+    current=current->next;
+    while (current != NULL) {
+		if (is_positive){
+			insertRear(msdDeque,-current->data);
+		}
+		else{
+			insertRear(msdDeque,current->data);
+		}
+        current=current->next;
+    }
+    freeDeque(binaryDeque);
+    return msdDeque;
+}
+
+void decToBin(long long dec, int bin[])
+{
+    if (dec < 0)
+    {
+        dec *= -1;
+        bin[0] = 1; // 0代表正，1代表负
+    }
+    else
+    {
+        bin[0] = 0;
+    }
+    long long num = dec;
+
+    int temp[99];
+    int i;
+    for (i = 0; num != 0; i++)
+    {
+        temp[i] = num % 2; // 使用 % 运算符计算余数
+        num /= 2;
+    }
+    for (int j = 1, index = i - 1; j <= i; j++, index--)
+    {
+        bin[j] = temp[index];
+    }
+    bin[i + 1] = -2; // 结束标志
+}
+
+void binToMsd(int bin[], int msd[])
+{
+    int index_msd = 0;
+    if (bin[0] == 1)
+    {
+        for (int index_bin = 1; bin[index_bin] != -2; index_bin++, index_msd++)
+        {
+            msd[index_msd] = 0;
+            if (bin[index_bin] == 1)
+                msd[index_msd] = -1;
+        }
+        msd[index_msd] = -2; // 结束标志
+    }
+    else
+    {
+        for (int index_bin = 1; bin[index_bin] != -2; index_bin++, index_msd++)
+        {
+            msd[index_msd] = bin[index_bin];
+        }
+        msd[index_msd] = -2; // 结束标志
+    }
+}
+
+int bin_to_dec(char bin[], int len)
+{
+    int result = 0, base = 1;
+    for (int i = len - 1; i >= 0; i--, base = base * 2)
+        result = result + (bin[i] - '0') * base;
+    return result;
+}
+
+long long msdToDec(int msd[])
+{
+    long long result = 0;
+    int len = 0;
+    while(msd[len] != -2)len++;
+    for (int i = 0, j = len - 1; i < len; i++, j--)
+    {
+    	if(msd[i]!=-2){
+            long long t = 1;
+            result += msd[i] * (t<<j);
+    	}
+    }
+    return result;
+}
+
+void convertToBinaryString(int *msd, char *result)
+{
+    int i = 0;
+    while (msd[i] != -2)
+    {
+        if (msd[i] == 0)
+        {
+            strcat(result, "00");
+        }
+        else if (msd[i] == 1)
+        {
+            strcat(result, "01");
+        }
+        else if (msd[i] == -1)
+        {
+            strcat(result, "10");
+        }
+        i++;
+    }
+}
+
+void binaryStringToMSD(char *binaryString, int *intArray, int length)
+{
+    for (int i = 0; i < length; i++)
+    {
+        char tmp[3];
+        strncpy(tmp, binaryString + i * 2, 2);
+        tmp[2] = '\0';
+
+        if (strcmp(tmp, "00") == 0)
+        {
+            intArray[i] = 0;
+        }
+        else if (strcmp(tmp, "01") == 0)
+        {
+            intArray[i] = 1;
+        }
+        else if (strcmp(tmp, "10") == 0)
+        {
+            intArray[i] = -1;
+        }
+        // Add more conditions as needed
+    }
+}
+
+void cdecToBin(unsigned value, int bits, char *binaryArray)
+{
+    for (int i = bits - 1; i >= 0; i--)
+    {
+        binaryArray[bits - 1 - i] = ((value >> i) & 1) + '0';
+    }
+    binaryArray[bits] = '\0'; // 添加 null 终止符
+}
+
+void write_reg(unsigned int*  array,int* msd ) {
+    char z[67] = "";
+    convertToBinaryString(msd, z);
+    int len_z = strlen(z);
+    if (len_z <= 32)
+    {
+        array[0] = bin_to_dec(z, len_z);
+    }
+    else if (len_z > 32 && len_z <= 64)
+    {
+        array[0] = bin_to_dec(z + len_z - 32, 32);
+        array[1] = bin_to_dec(z, len_z - 32);
+    }
+    else if (len_z > 64 && len_z <= 96)
+    {
+        array[0] = bin_to_dec(z + len_z - 32, 32);
+        array[1] = bin_to_dec(z + len_z - 64, 32);
+        array[2] = bin_to_dec(z, len_z - 64);
+    }
+}
+void printUnsignedArray(unsigned int array[][3], int rows, int cols) {
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            printf("%u ", array[i][j]);
+        }
+        printf("\n");
+    }
+}
+
+void regToDec(unsigned int decresult[][3],long long * ansDec,int index){
+    char ans_c[70] = "";
+    cdecToBin(decresult[index][2], 6, ans_c);
+    cdecToBin(decresult[index][1], 32, ans_c + 6);
+    cdecToBin(decresult[index][0], 32, ans_c + 38);
+    int msd_c[40];
+
+    int length = strlen(ans_c) / 2; // Assuming the length is even
+    binaryStringToMSD(ans_c, msd_c, length);
+    msd_c[length] = -2;
+    ansDec[index] = msdToDec(msd_c);
+}
+
+
+void printLongLongArray(long long array[], int length) {
+    for (int i = 0; i < length; ++i) {
+        printf("%lld ", array[i]);
+    }
+    printf("\n");
+}
+
+void printIntArray(int array[], int length) {
+    for (int i = 0; i < length; ++i) {
+        printf("%d ", array[i]);
+    }
+    printf("\n");
+}
+
+void printIntArrayNoLen(int array[]){
+	int i=0;
+	while(array[i]!=-2){
+		printf("%d ", array[i++]);
+	}
+	printf("\n ");
+}
+
+int* dequeToArray(Deque* msdDeque){
+	int* msdArray=(int*)malloc(sizeof(int)*(msdDeque->size+1));
+    Node* current = msdDeque->front;
+    for(int i=0;i<msdDeque->size;i++){
+        msdArray[i]=current->data;
+        current = current->next;
+    }
+    freeDeque(msdDeque);
+    msdArray[msdDeque->size]=-2;
+    return msdArray;
+}
+
+int main(){
+    long long m=-10;
+    long long n=5;
+    int arrayLength = (END_ADDRESS - START_ADDRESS) / STEP_SIZE + 1;
+    int deviceAddresses[arrayLength];
+    int currentAddress = START_ADDRESS;
+    for (int i = 0; i < arrayLength; ++i) {
+        deviceAddresses[i] = currentAddress;
+        currentAddress += STEP_SIZE;
+    }
+
+	Deque* binary_queue1 =decimalToBinary(m);
+	Deque* binary_queue2 =decimalToBinary(n);
+    Deque* msd_queue1=binaryToMSD(binary_queue1);
+    Deque* msd_queue2=binaryToMSD(binary_queue2);
+    printf("len=%d\n",msd_queue2->size);
+    Deque* partial_product[msd_queue2->size];
+    Node* current = msd_queue2->front;
+    for(int i=(msd_queue2->size-1);i>=0&&current!=NULL;i--){
+    	printf("i=%d\n",i);
+    	Deque* m_queue=transform_m(msd_queue1,current->data,i);
+    	partial_product[i]=m_queue;
+    	current = current->next;
+    }
+    for(int i=0;i<msd_queue2->size;i++){
+    	printDeque(partial_product[i]);
+    }
+
+//
+//    int k_reg[9];
+//	for (int i = 0; i < 9; i++) {
+//		k_reg[i] = i * 4;
+//	}
+//
+//
+//	int* mid_msd=dequeToArray(partial_product[0]);
+//
+//	unsigned int decresult[3]={0};
+//    for(int i=1;i<msd_queue2->size;i++){
+//    	unsigned int reg_a[3] = { 0 };
+//    	unsigned int reg_b[3] = { 0 };
+//    	write_reg(reg_a,mid_msd);
+//		write_reg(reg_b,dequeToArray(partial_product[i]));
+//		MSD_33_mWriteReg(deviceAddresses[0], k_reg[0], reg_a[0]);
+//		MSD_33_mWriteReg(deviceAddresses[0], k_reg[1], reg_a[1]);
+//		MSD_33_mWriteReg(deviceAddresses[0], k_reg[2], reg_a[2]);
+//
+//		MSD_33_mWriteReg(deviceAddresses[0], k_reg[3], reg_b[0]);
+//		MSD_33_mWriteReg(deviceAddresses[0], k_reg[4], reg_b[1]);
+//		MSD_33_mWriteReg(deviceAddresses[0], k_reg[5], reg_b[2]);
+//
+//		decresult[0]=MSD_33_mReadReg(deviceAddresses[0], k_reg[6]);
+//		decresult[1]=MSD_33_mReadReg(deviceAddresses[0], k_reg[7]);
+//		decresult[2]=MSD_33_mReadReg(deviceAddresses[0], k_reg[8]);
+//		char ans_c[70] = "";
+//		// 转换第3个元素为6位二进制
+//		cdecToBin(decresult[2], 6, ans_c);
+//		// 转换第二个元素为32位二进制
+//		cdecToBin(decresult[1], 32, ans_c + 6);
+//		// 转换第一个元素为32位二进制，不足位数补零
+//		cdecToBin(decresult[0], 32, ans_c + 38);
+//
+//		int msd_c[40];
+//		int length = strlen(ans_c) / 2; // Assuming the length is even
+//		binaryStringToMSD(ans_c, msd_c, length);
+//		msd_c[length] = -2;
+//		printIntArrayNoLen(mid_msd);
+//		mid_msd=msd_c;
+//    }
+//    int t=0;
+//    while(mid_msd[t]!=-2){
+//    	printf("%d ", mid_msd[t]);
+//    	t++;
+//    }
+//    printf("\n");
+//    long long ansDec= msdToDec(mid_msd);
+//    printf("%lld * %lld = %lld \n", m,n,ansDec);
+	return 0;
+}
+
