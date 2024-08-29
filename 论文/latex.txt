@@ -1,0 +1,47 @@
+% \subsection{部分积生成方法}
+% 依据 MSD 乘法原理，部分积是进行 M 变换的结果，部分积$S_j$的表达式如公式3所示:
+% \begin{equation}
+% S_j=U_{j(n-1)}U_{j(n-2)}U_{j(n-3)}...U_{j_2}U_{j_1}U_{j_0}  0\leq j \leq m-1
+% \label{eq:example}
+% \end{equation}
+% 由公式3可知，部分积$S_j$是一个 n 位的 MSD 数，它的位数和被乘数的位数相同。部分积$S_j$中每位的取值是$U_{ji}=M(a_i,b_j),0\leq i \leq n-1 ,M(a_i,b_j)表示a_i和b_j$经过M变换的值，$a_i$表示被乘数中的第 i+1 位，$b_i$表示乘数中的第 j+1位，$M(a_i,b_j)$计算公式4所示:
+
+% \begin{equation}
+% \resizebox{0.92\linewidth}{!}{
+% $M(a_i,b_j) = 
+% \begin{cases} 
+%     u, & \text{if } a_i=1 , b_j=u \\
+%     0, & \text{if } (a_i=u , b_j=u) \quad \text{or} \quad (a_i=0 , b_j=u,0,1) \quad \text{or} \quad (a_i=1, b_j=0) \\
+%     1, & \text{if } (a_i=u , b_j=0,1) \quad \text{or} \quad (a_i=1 , b_j=1)
+% \end{cases}$
+% }
+% \label{eq:example}
+% \end{equation}
+% 部分积相邻数据位之间，高位无需等待低位的进位，因此不同数据位之间的 M 变换可以并行完成。对于部分积生成，当只有 1 个 M 变换器时，需要 $m$ 个时钟周期；当有 $m$ 个 M 变换器时，只需 1 个时钟周期。因此，M 变换完成的时钟周期 $T$ 的取值范围为 $1 \leq T \leq m$。
+
+
+% \subsection{部分积求和方法}
+% 根据之前的计算得到的部分积，需要对每个部分积进行移位操作，从而得到和数项。随后，对这些和数项进行求和，最终得到乘积的结果。移位规则如下表所示
+
+% \begin{table}[H]
+% \centering
+% \begin{tabular}{ccc}% 其中，tabular是表格内容的环境；c表示centering，即文本格式居中；c的个数代表列的个数
+% \toprule %[4pt]设置线宽     
+% partial product & number of bits shifted  &  summation term (math)\\ %换行
+% \midrule %[2pt]  
+% $S_0$ & 0 & $P_0$ \\
+% $S_1$ & 1 & $P_1$ \\
+% $S_2$ & 2 & $P_2$ \\
+% ... &   ... & ... \\
+% $S_{m-2}$ & m-2 &$P_{m-2}$  \\
+% $S_{m-1}$ & m-1 & $P_{m-1}$ \\
+% \bottomrule %[2pt]     
+% \end{tabular}
+% \caption{Shift rules}
+% \label{tab:partial_products}
+% \end{table}
+% 从表3中，$S_{m-1}$表示第 m 个部分积，m表示正整数。得到部分积后，需要对部分积求和,求和公式5所示:
+% \begin{equation}
+% C=P_0+P_1+P_2+...+P_{m-2}+P_{m-1}
+% \label{eq:example}
+% \end{equation}
